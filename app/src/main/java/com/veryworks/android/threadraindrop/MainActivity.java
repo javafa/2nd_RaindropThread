@@ -7,13 +7,14 @@ import android.graphics.Paint;
 import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.FrameLayout;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener{
 
@@ -22,6 +23,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     Button btnStart,btnPause,btnStop;
 
     int deviceWidth,deviceHeight;
+
+    boolean running = true;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,7 +55,9 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     public void onClick(View v) {
         switch(v.getId()){
             case R.id.btnStart:
-                MakeRain rain = new MakeRain();
+                DrawStage drawStage = new DrawStage(stage);
+                drawStage.start();
+                MakeRain rain = new MakeRain(stage);
                 rain.start();
                 break;
             case R.id.btnPause:
@@ -62,16 +67,39 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
+    class DrawStage extends Thread{
+
+        Stage stage;
+        public DrawStage(Stage stage){
+            this.stage = stage;
+        }
+
+        public void run(){
+            while(running){
+                stage.postInvalidate();
+//                try {
+//                    Thread.sleep(10);
+//                }catch(Exception e){
+//                    e.printStackTrace();
+//                }
+            }
+        }
+    }
+
     class MakeRain extends Thread{
         boolean flag = true;
+        Stage stage;
+        public MakeRain(Stage stage){
+            this.stage = stage;
+        }
+
         @Override
         public void run(){
+
             while(flag){
-                Raindrop raindrop = new Raindrop();
-                stage.addRaindrop(raindrop);
-                raindrop.start();
+                new Raindrop(stage);
                 try {
-                    Thread.sleep(50);
+                    Thread.sleep(10);
                 }catch(Exception e){
                     e.printStackTrace();
                 }
@@ -84,33 +112,38 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         int y;
         int radius;
         int speed;
-        int direction;
 
-        boolean stopflag = true;
+        boolean stopflag = false;
         boolean pauseflag = false;
 
+        Stage stage;
+
+        public Raindrop(Stage stage){
+            Random random = new Random();
+            x = random.nextInt(deviceWidth);
+            y = 0;
+            radius = random.nextInt(30)+5;
+            speed = random.nextInt(10)+1;
+
+            this.stage = stage;
+            stage.addRaindrop(this);
+        }
 
         @Override
         public void run(){
-            while(stopflag && y < deviceHeight + radius ){
+            while(!stopflag){
                 if(!pauseflag) {
                     y = y + speed;
-                    stage.postInvalidate();
                     try {
                         Thread.sleep(10);
                     }catch(Exception e){
                         e.printStackTrace();
                     }
                 }
+                if(y > deviceHeight)
+                    stopflag = true;
             }
-        }
-
-        public Raindrop(){
-            Random random = new Random();
-            x = random.nextInt(deviceWidth);
-            y = 0;
-            radius = random.nextInt(30)+5;
-            speed = random.nextInt(10)+1;
+            stage.removeRaindrop(this);
         }
     }
 
@@ -121,7 +154,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         public Stage(Context context) {
             super(context);
-            raindrops = new ArrayList<>();
+            raindrops = new CopyOnWriteArrayList<>();
             rainColor = new Paint();
             rainColor.setColor(Color.BLUE);
         }
@@ -129,14 +162,20 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         @Override
         protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-            for(int i=0 ; i<raindrops.size() ; i++) {
-                Raindrop raindrop = raindrops.get(i);
+            Log.i("Rain Size","==================================" + raindrops.size());
+            for(Raindrop raindrop : raindrops) {
                 canvas.drawCircle(raindrop.x, raindrop.y, raindrop.radius, rainColor);
             }
         }
 
         public void addRaindrop(Raindrop raindrop){
             raindrops.add(raindrop);
+            raindrop.start();
+        }
+
+        public void removeRaindrop(Raindrop raindrop){
+            raindrops.remove(raindrop);
+            raindrop.interrupt();
         }
     }
 }
